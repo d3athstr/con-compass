@@ -1,0 +1,252 @@
+# Con Compass - Badge Carrier - text schematic
+# rev A (PROVISIONAL - board not yet drafted in KiCad)
+# source: HAND-WRITTEN. There is no con-compass-badge.kicad_sch yet.
+#         When one exists, regenerate with:
+#         kicad_text_schematic.py /root/con-compass/hardware/badge/badge.kicad_sch
+#         and this hand-written body is REPLACED by the generated one.
+#
+# Refdes below are the intended refdes and must be carried into the drafted
+# schematic unchanged.
+
+STATUS: this documents the intended carrier. It is NOT derived from a drafted
+schematic, because none exists. One item still blocks layout -
+see OPEN ITEMS at the bottom. Do not fab from this file.
+
+
+PARTS (16)
+  BT1    3.7V 1200mAh LiPo (off-board)   -> J2
+  C1     0.1uF 50V ceramic disc          C_Disc_D5.0mm_W2.5mm_P5.00mm
+  C2     0.1uF 50V ceramic disc          C_Disc_D5.0mm_W2.5mm_P5.00mm
+  D1     1N4148                          D_DO-35_SOD27_P7.62mm_Horizontal
+  DS1    OLED SSD1306 128x64 (off-board) -> J4
+  J1     XIAO socket (U1)                XIAO_THT   <-- 15.24mm, see LANDS
+  J2     BATT IN (LiPo, JST PH 2.0)      JST_PH_S2B-PH-K
+  J3     FUEL GAUGE (MAX17048)           PinHeader_1x04_P2.54mm_Vertical
+  J4     OLED SSD1306 (I2C)              PinHeader_1x04_P2.54mm_Vertical
+  J5     HAPTIC M1                       PinHeader_1x02_P2.54mm_Vertical
+  M1     coin vibration motor (off-board) -> J5
+  Q1     AO3400 N-ch MOSFET              SOT-23
+  R1     10k                             R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal
+  SW1    POWER (battery isolation)       SW_Slide_SS-12E17G2
+  SW2    BTN CYCLE                       SW_Push_6mm_H5mm
+  SW3    BTN PING                        SW_Push_6mm_H5mm
+  SW4    BTN HOME                        SW_Push_6mm_H5mm
+  U1     XIAO ESP32-S3                   XIAO_THT (in J1)
+  U3     MAX17048 fuel gauge (off-board) -> J3
+
+  U2     Wio-SX1262 LoRa module -- DELIBERATELY NOT ON THIS BOARD.
+         It mates to U1's UNDERSIDE B2B CONNECTOR and hangs beneath U1.
+         There is no U2 land and no SPI on this carrier. See B2B below.
+
+
+NETS (12) - carrier only
+
+  NET /GND
+      C1.2  C2.2  D1.A(via Q1.D)  J2.2  J3.2  J4.1  Q1.2(S)
+      R1.2  SW2.2  SW3.2  SW4.2  U1.13(GND)
+
+  NET /+3V3        (U1's own regulator output - this board has no regulator)
+      C1.1  C2.1  D1.K  J4.2  J5.1  U1.12(3V3)
+
+  NET /VBAT_SW     (switched cell rail)
+      SW1.2  U1.BAT+   J3.1
+  NET /VBAT_RAW    J2.1  SW1.1
+  NET /BATT_GND    J2.2  U1.BAT-          (common with /GND)
+
+  NET /SDA         J3.3  J4.4  U1.5(D4/SDA)
+  NET /SCL         J3.4  J4.3  U1.6(D5/SCL)
+
+  NET /HAPTIC_G    Q1.1(G)  R1.1  U1.4(D3/A3= GPIO4)
+  NET /HAPTIC_M    J5.2  Q1.3(D)  D1.A
+  NET /BTN_CYCLE   SW2.1  U1.2(D1/A1 = GPIO2)
+  NET /BTN_PING    SW3.1  U1.3(D2/A2 = GPIO3)
+  NET /BTN_HOME    SW4.1  U1.7(D6 = GPIO43)
+
+  Buttons use the ESP32 internal pull-ups and short to GND when pressed.
+  No external pull-up parts.
+
+  I2C PULL-UPS: none on this carrier, on purpose. Both I2C devices are
+  breakout modules (DS1 and U3) that carry their own. Adding a third pair
+  here would put three sets in parallel and over-stiffen the bus.
+
+
+U1 PIN BUDGET - RESOLVED 2026-09-07, it fits with room to spare
+
+  Castellated pins CONSUMED by the Wio-SX1262 (SPI only):
+    U1.9(D8  = GPIO7)  LORA_SCK
+    U1.10(D9 = GPIO8)  LORA_MISO
+    U1.11(D10= GPIO9)  LORA_MOSI
+
+  The SX1262's control lines do NOT cost a castellated pin. They sit on GPIOs
+  that the XIAO ESP32-S3 does not bring out to the 14-pin header at all - they
+  exist only on the underside B2B connector:
+    CS=GPIO41  RESET=GPIO42  DIO1=GPIO39  BUSY=GPIO40  RXEN=GPIO38
+  Source: meshtastic/firmware variants/esp32s3/seeed_xiao_s3/variant.h.
+  That variant also fixes I2C at SDA=GPIO5 (D4) and SCL=GPIO6 (D5), which is
+  exactly the assignment used above - keep it, so a badge can be flashed with
+  stock Meshtastic for debugging without rewiring.
+
+  UNCONNECTED / FREE
+    U1.14(5V)      - USB 5V, unused; charging is internal to the XIAO
+    U1.1(D0/A0  = GPIO1)  free. Avoided on purpose: stock Meshtastic drives
+                          it as PIN_GPS_STANDBY. Do not hang the haptic here.
+    U1.8(D7 = GPIO44)     free. Avoided for the haptic for the same reason -
+                          stock Meshtastic uses GPIO43/44 as the GPS UART, and
+                          a UART idles HIGH, which would run the motor
+                          continuously. SW4 sits on GPIO43 instead, which is
+                          harmless: it is an input, and a driven pin simply
+                          reads driven.
+    The haptic gate is on D3/GPIO4, which the variant leaves unassigned - so
+    the motor cannot be woken by a stray peripheral under any firmware.
+
+
+THE U1 <-> U2 B2B INTERFACE (not routed here, but it constrains this board)
+
+  The Wio-SX1262 does NOT sit in its own XIAO land. It mates to the XIAO
+  ESP32-S3's underside board-to-board connector and sits directly beneath U1
+  - the same arrangement Sentinel uses ("the Wio-SX1262 rides on top of U2 and
+  is off this board", techtaria-sentinel/README.md:108).
+
+  Three consequences this carrier MUST honour:
+
+  1. MECHANICAL. The area under U1's XIAO land must be a KEEPOUT with a
+     clearance cutout: no copper, no silk, no components, and enough Z for the
+     module. U1 sits on J1 socket strips, so the stack height is
+     socket + Wio-SX1262 + XIAO. Measure the real stack before fixing the
+     shell depth.
+  2. ANTENNA. AE1, the 915MHz u.FL, lands on the Wio-SX1262 itself, NOT on
+     this board. Its lead has to escape the cutout and reach the top edge.
+  3. ELECTRICAL. No SPI, NSS, BUSY, RST or DIO net appears on this carrier.
+     Of the pins those signals use, only the SPI trio (D8/D9/D10) is also a
+     castellated pin and therefore spent; CS/RST/DIO1/BUSY/RXEN are B2B-only
+     and cost this board nothing. See U1 PIN BUDGET above.
+
+  Firmware note: this exact combo is an official Meshtastic target,
+  variant esp32s3/seeed_xiao_s3.
+
+
+POLARITY / ORIENTATION - the class of error that passes DRC
+  D1   1N4148 flyback. BANDED END = CATHODE = to /+3V3. Reversed, it shorts
+       the 3V3 rail through Q1 every time the motor is driven.
+  Q1   AO3400 SOT-23: pin 1 GATE, pin 2 SOURCE (to GND), pin 3 DRAIN (to M1).
+  C1   ceramic disc, non-polarised, orientation free.
+  C2   ceramic disc, non-polarised, orientation free.
+  BT1  LiPo. Confirm the JST PH polarity against the CELL, not against the
+       connector shell - cheap LiPo leads are not consistently wired, and the
+       XIAO's BAT pads will not survive a reversal.
+  U3   MAX17048 VIN IS LEFT OPEN. The die is cell-derived. Strapping VIN to
+       3V3 backfeeds the 3V3 rail and defeats SW1 - the badge will not turn
+       off. This is the exact fault found on PipBoy 2026-08-20.
+
+
+LANDS - the check that DRC cannot do
+
+  J1 XIAO_THT land: hole columns 15.24 mm apart.
+  NOT 17.0 mm. 17.0 mm is the SMD CASTELLATION span from Seeed's datasheet.
+  Source: Seeed "XIAO Series Package and PCB Design" p.7, confirmed against
+  Seeed's own XIAO-ESP32-C6-DIP.kicad_mod.
+  Getting this wrong scrapped 25 fabbed boards across six carriers on
+  2026-08-29. Every route and fab run must pass kicad_land_gate.py.
+
+
+POWER PATH
+
+  USB-C (on U1) ---> XIAO internal charger ---> BT1
+                                                 (charge current is the
+                                                  XIAO's own, ~100mA)
+
+  BT1 3.0-4.2V
+    |
+  J2.1 /VBAT_RAW
+    |
+  SW1  slide switch          <-- HARD ISOLATION. Deep sleep alone is not
+    |                            enough between events; these sit in a
+    |                            drawer for a year at a time.
+    |
+  +-- /VBAT_SW --+-- U1.BAT+     (XIAO powers itself + charges from here)
+                 |
+                 +-- J3.1        (U3 MAX17048 senses the CELL directly,
+                                  NOT the 3V3 rail - a gauge reading a
+                                  regulated rail reads a flat line and
+                                  tells you nothing)
+
+  U1.12 /+3V3  (XIAO's own LDO, ~700mA available)
+    |
+    +-- C1 0.1uF --- GND         bulk near the B2B / LoRa supply
+    +-- C2 0.1uF --- GND         bulk at the I2C rail
+    +-- J4.2                     DS1 OLED
+    +-- J5.1 --------------------+
+                                 |
+                                 M1  coin motor, 2.0-3.5V, ~75mA
+                                 |
+    /+3V3 --- D1 (K to rail) ----+  <-- FLYBACK. M1 is inductive.
+                                 |      Without D1, Q1 dies.
+                                 |
+                            Q1.3 (DRAIN)
+                                 |
+                            Q1 AO3400  <-- Q1.1 GATE
+                                 |            |
+                            Q1.2 (SOURCE)     +-- R1 10k --- GND
+                                 |            |
+                                GND           +-- U1.D6
+                                                  R1 holds M1 OFF while the
+                                                  GPIO is high-Z during boot
+                                                  and reset. Without it the
+                                                  badge buzzes on every
+                                                  power-up.
+
+  NOTE: M1 runs from the REGULATED 3V3 rail, not the raw cell. The motor is
+  rated 2.0-3.5V and a full LiPo at 4.2V would overdrive it.
+
+  POWER BUDGET (the real constraint: 16 hours off an outlet on 1200mAh)
+    Nothing here is continuous-duty. The design only closes if:
+      - DS1 is DARK unless a button was pressed  (OLED is the biggest drain)
+      - LoRa RX duty-cycles between beacons
+      - BLE advertises slowly until homing mode is entered
+      - M1 is PULSED, never held (~75mA while running)
+    Homing mode is deliberately the expensive mode - full-rate BLE scan and
+    fast LoRa polling - entered by SW4 and timed out automatically.
+
+
+REFDES -> PARTSBIN COMPONENT (so the BOM and the board reconcile without KiCad)
+  PCB1    [370] Con Compass Badge PCB (rev A, 2-layer)     NOT DESIGNED YET
+  U1      [237] XIAO ESP32-S3 Dev Board                    MCU + BLE tether
+  U2      [248] Wio-SX1262 LoRa Module for XIAO            OFF-BOARD, B2B under U1
+  U3      [91]  MAX17048 LiPo Fuel Gauge Board             off-board on J3
+  DS1     [238] OLED Display 0.96in 128x64 I2C SSD1306     off-board on J4
+  J1,J3,J4,J5
+          [258] 2.54mm Header Strip (M/F, XIAO sockets)    one strip per board
+  J2      [223] JST PH 2.0mm 2-Pin Through-Hole Header
+  BT1     [101] 3.7V 1200mAh Lithium Ion Polymer Battery
+  AE1     [261] 915MHz LoRa Antenna (u.FL/IPEX, US-915)    lands on U2, not here
+  AE2     [231] 2.4GHz FPC Antenna for XIAO ESP32-S3       lands on U1's u.FL
+  SW1     [44]  Micro Slide Switch (SS-12E17G2)
+  SW2-SW4 [11]  6x6x5mm Tactile Push Button Switch         3 per board
+  M1      [371] Coin Vibration Motor 10mm (3V)             NOT [335]: that
+                                                           module needs 3.7V to
+                                                           start and dies as the
+                                                           cell sags
+  Q1      [9]   AO3400 N-Channel MOSFET (SOT-23)
+  D1      [298] 1N4148 Switching Diode (DO-35)
+  R1      [149] 10k +-1% Metal Film Resistor (1/4W)
+  C1, C2  [10]  0.1uF 50V Ceramic Disc Capacitor
+  ENC1    [372] 3D-Printed Badge Shell + Lanyard Bezel
+
+
+OPEN ITEMS
+
+  1. [RESOLVED 2026-09-07] GPIO budget vs the B2B. It fits, with two pins
+     spare - see U1 PIN BUDGET above. The SX1262's control lines live on
+     GPIO38-42, which are not on the castellated header, so only the SPI trio
+     is spent. The resistor-ladder fallback is NOT needed and no ladder
+     resistors belong on the BOM.
+
+  2. ANTENNA PLACEMENT ON A BODY-WORN BADGE. *** BLOCKS LAYOUT ***
+     A wearer is a bag of saltwater and absorbs a great deal of 915MHz. AE1
+     must run along the TOP EDGE, outside the shell's board tray, with no
+     ground pour, battery or metal insert between it and the outside world.
+     This wants measuring on a prototype before the outline is fixed, not
+     assuming.
+
+  3. (Not blocking) Whether SW2 should be a rotary encoder instead, for
+     scrolling a 10-person peer list. Three buttons may be too few.
